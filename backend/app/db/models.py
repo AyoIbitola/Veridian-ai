@@ -9,6 +9,7 @@ class Tenant(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     plan = Column(String, default="free")
+    notification_config = Column(JSON, default={}) # {"slack_webhook": "", "email_recipients": []}
     created_at = Column(DateTime, default=datetime.utcnow)
     
     agents = relationship("Agent", back_populates="tenant")

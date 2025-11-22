@@ -145,5 +145,4 @@ Thumbs.db
 # Project specific
 *.db
 backend/import_error.log
-backend/check_app_import.py
 backend/verify_gemini.py

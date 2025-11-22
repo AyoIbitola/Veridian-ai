@@ -10,3 +10,4 @@ pyyaml
 google-generativeai
 passlib[bcrypt]
 python-jose[cryptography]
+email-validator
