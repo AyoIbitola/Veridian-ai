@@ -65,8 +65,21 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
 
 from fastapi.security import OAuth2PasswordRequestForm
 
+# JSON-based login (for normal API usage)
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).filter(User.email == user_in.email))
+    user = result.scalars().first()
+    
+    if not user or not security.verify_password(user_in.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+    access_token = security.create_access_token(subject=user.email)
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# Form-based login (for Swagger UI OAuth2 "Authorize" button)
+@router.post("/token", response_model=Token)
+async def login_oauth2(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     # OAuth2PasswordRequestForm uses 'username', so we treat it as email
     result = await db.execute(select(User).filter(User.email == form_data.username))
     user = result.scalars().first()
