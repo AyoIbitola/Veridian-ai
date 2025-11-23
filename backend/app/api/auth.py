@@ -63,12 +63,15 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     access_token = security.create_access_token(subject=user.email)
     return {"access_token": access_token, "token_type": "bearer"}
 
+from fastapi.security import OAuth2PasswordRequestForm
+
 @router.post("/login", response_model=Token)
-async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).filter(User.email == user_in.email))
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    # OAuth2PasswordRequestForm uses 'username', so we treat it as email
+    result = await db.execute(select(User).filter(User.email == form_data.username))
     user = result.scalars().first()
     
-    if not user or not security.verify_password(user_in.password, user.password_hash):
+    if not user or not security.verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
         
     access_token = security.create_access_token(subject=user.email)
