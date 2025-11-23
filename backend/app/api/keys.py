@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.db.events import get_db
-from app.db.models import APIKey, User
-from app.core.security import get_api_key
+from app.db.models import APIKey, User, Workspace
+from app.core.security import get_current_user
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import secrets
@@ -33,10 +33,17 @@ class APIKeyList(BaseModel):
 async def create_api_key(
     key_in: APIKeyCreate,
     db: AsyncSession = Depends(get_db),
-    # In real app, get current user from auth token
-    # For demo, we assume user_id=1 (created in auth.py)
-    user_id: int = 1 
+    current_user: User = Depends(get_current_user)
 ):
+    # Get user's workspace to find tenant_id
+    workspace_result = await db.execute(
+        select(Workspace).filter(Workspace.owner_id == current_user.id)
+    )
+    workspace = workspace_result.scalars().first()
+    
+    if not workspace:
+        raise HTTPException(status_code=404, detail="No workspace found for user")
+    
     # Generate Key
     raw_key = "vk_" + secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
@@ -46,8 +53,8 @@ async def create_api_key(
     db_key = APIKey(
         key_hash=key_hash,
         name=key_in.name,
-        owner_id=user_id,
-        tenant_id=1, # Default tenant
+        owner_id=current_user.id,
+        tenant_id=workspace.tenant_id,
         expires_at=expires_at
     )
     db.add(db_key)
@@ -65,9 +72,9 @@ async def create_api_key(
 @router.get("/", response_model=list[APIKeyList])
 async def list_api_keys(
     db: AsyncSession = Depends(get_db),
-    user_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(select(APIKey).filter(APIKey.owner_id == user_id))
+    result = await db.execute(select(APIKey).filter(APIKey.owner_id == current_user.id))
     keys = result.scalars().all()
     return keys
 
@@ -75,10 +82,10 @@ async def list_api_keys(
 async def revoke_api_key(
     key_id: int,
     db: AsyncSession = Depends(get_db),
-    user_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
     key = await db.get(APIKey, key_id)
-    if not key or key.owner_id != user_id:
+    if not key or key.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Key not found")
     
     await db.delete(key)
