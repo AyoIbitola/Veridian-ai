@@ -79,4 +79,10 @@ async def get_api_key(
             detail="Invalid API Key"
         )
         
+    if api_key_obj.expires_at and api_key_obj.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API Key has expired"
+        )
+        
     return api_key_obj

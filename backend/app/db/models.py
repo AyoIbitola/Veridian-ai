@@ -138,3 +138,13 @@ class APIKey(Base):
 
     owner = relationship("User", back_populates="api_keys")
     tenant = relationship("Tenant", back_populates="api_keys")
+
+class ToolEvent(Base):
+    __tablename__ = "tool_events"
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"))
+    agent_id = Column(Integer, ForeignKey("agents.id"))
+    tool_name = Column(String)
+    tool_args = Column(Text) # JSON string
+    allowed = Column(Boolean)
+    timestamp = Column(DateTime, default=datetime.utcnow)

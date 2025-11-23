@@ -24,7 +24,7 @@ async def handle_agent_event(
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.events import get_db
-from app.db.models import Incident, APIKey
+from app.db.models import Incident, APIKey, ToolEvent
 from app.api.models import WebhookEvent, WebhookResponse
 from app.core.security import get_api_key
 from app.engines.sdk import sdk
@@ -46,6 +46,17 @@ async def handle_agent_event(
         }
         
         eval_result = sdk.evaluate_action(action_data)
+        
+        # Log Tool Event
+        tool_event = ToolEvent(
+            tenant_id=api_key.tenant_id,
+            agent_id=event.agent_id,
+            tool_name=event.payload.get("tool"),
+            tool_args=str(event.payload.get("args", "")),
+            allowed=(eval_result["decision"] == "allow")
+        )
+        db.add(tool_event)
+        await db.commit()
         
         if eval_result["decision"] != "allow":
             # Create Incident
