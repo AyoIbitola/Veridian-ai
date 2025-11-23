@@ -172,7 +172,7 @@ Respond ONLY with valid JSON in this exact format:
         
         decision = "allow"
         if harmful_keywords or pii or judge_result.get("harmful", False):
-            decision = "block"
+            decision = "flag"
         elif judge_result.get("hallucination_score", 0) > 0.7:
             decision = "flag"
             

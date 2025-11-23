@@ -23,8 +23,8 @@ class AgentIntentMonitor:
         
         # Fallback keyword list (used if model is not provided)
         self.destructive_commands = [
-            "rm -rf", "drop table", "delete from", "shutdown", "curl", "wget",
-            "format", "mkfs", "dd if=", ":(){ :|:& };:", "chmod 777", "chown"
+            "rm -rf", "rm -r", "rm -f", "drop table", "delete from", "shutdown", "curl", "wget",
+            "format", "mkfs", "dd if=", ":(){ :|:& };:", "chmod 777", "chown", "mv /", "cp /"
         ]
     
     def detect_with_llm(self, command: str) -> Dict:
@@ -107,18 +107,28 @@ Command to evaluate: {command}"""
 
     def analyze_action(self, action: Dict) -> Dict:
         """Analyzes an agent action for security risks."""
-        command = action.get("args", "")
+        # Extract command from various possible formats
+        command = action.get("args", "") or action.get("command", "") or str(action)
         if isinstance(command, dict):
             command = json.dumps(command)
         
-        return self.detect_with_llm(str(command))
+        command_str = str(command)
+
+        # 1. Deterministic Pre-check (Fast & Safe)
+        pre_check = self._keyword_fallback(command_str)
+        if pre_check["risk_score"] >= 1.0:
+            self.logger.warning(f"Blocked by pre-check: {pre_check['reasons']}")
+            return pre_check
+            
+        # 2. LLM Evaluation (Deep Analysis)
+        return self.detect_with_llm(command_str)
 
     def evaluate_agent_action(self, action: Dict) -> Dict:
         """Main entry point for action evaluation."""
         analysis = self.analyze_action(action)
         decision = "allow"
         if analysis["risk_score"] > 0.8:
-            decision = "block"
+            decision = "flag"
         elif analysis["risk_score"] > 0.3:
             decision = "flag"
             
