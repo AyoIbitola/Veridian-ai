@@ -35,7 +35,9 @@ class RedTeamRunner:
             if agent.model_info.startswith("http"):
                  target_url = agent.model_info
             
-            attack_results = sdk.run_redteam(user_prompt=user_intent, target_description=target_desc, target_url=target_url)
+            target_config = campaign.config.get("target_config")
+            
+            attack_results = sdk.run_redteam(user_prompt=user_intent, target_description=target_desc, target_url=target_url, target_config=target_config)
             
             for result in attack_results:
                 attack_type = result["attack_type"]

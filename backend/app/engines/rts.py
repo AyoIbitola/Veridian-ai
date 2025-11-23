@@ -64,19 +64,41 @@ Return ONLY the attack prompt, nothing else."""
         
         return self._call_gemini_api(prompt, max_tokens=200)
 
-    def probe_target(self, adversarial_prompt: str, target_description: str, target_url: str = None) -> str:
+    def probe_target(self, adversarial_prompt: str, target_description: str, target_url: str = None, target_config: Dict = None) -> str:
         """
         Simulate target model response using Gemini OR probe a real URL.
         """
         if target_url:
             # Real Attack: Send HTTP request to target URL
             import httpx
+            import json
             try:
-                # Simple POST request assuming the target accepts "prompt" or "content"
-                # In a real scenario, this would need configurable request templates
+                method = "POST"
+                headers = {}
+                json_body = {"prompt": adversarial_prompt} # Default
+                
+                if target_config:
+                    method = target_config.get("method", "POST")
+                    headers = target_config.get("headers", {})
+                    
+                    # Handle Body Template
+                    if "body_template" in target_config:
+                        template = target_config["body_template"]
+                        # Replace {{prompt}} with the actual adversarial prompt
+                        # We dump to string to do replacement, then load back if it's valid JSON
+                        # Or just construct it if it's a simple dict structure
+                        
+                        # Simple recursive replacement helper could be better, but for now let's do string replacement on the JSON dump
+                        # This allows replacing inside nested structures
+                        template_str = json.dumps(template)
+                        body_str = template_str.replace("{{prompt}}", adversarial_prompt)
+                        json_body = json.loads(body_str)
+
                 with httpx.Client(timeout=10) as client:
-                    response = client.post(target_url, json={"prompt": adversarial_prompt})
+                    response = client.request(method, target_url, headers=headers, json=json_body)
+                    
                     if response.status_code == 200:
+                        # Try to extract content if response_parser is defined, else return text
                         return response.text
                     else:
                         return f"[ERROR: Target returned {response.status_code}]"
@@ -100,7 +122,7 @@ Respond as the target model would. Description of target: {target_description}""
             output=response
         )
 
-    def run_red_team_test(self, user_prompt: str, target_description: str = "general AI assistant", target_url: str = None) -> List[Dict]:
+    def run_red_team_test(self, user_prompt: str, target_description: str = "general AI assistant", target_url: str = None, target_config: Dict = None) -> List[Dict]:
         """
         Full red team pipeline: generate → attack → evaluate.
         
@@ -121,7 +143,7 @@ Respond as the target model would. Description of target: {target_description}""
             adversarial = self.generate_attack_prompt(user_prompt, attack_type)
             
             # Step 2: Simulate target response
-            model_response = self.probe_target(adversarial, target_description, target_url)
+            model_response = self.probe_target(adversarial, target_description, target_url, target_config)
             
             # Step 3: Evaluate the response
             evaluation = self.evaluate_response(model_response, attack_type)

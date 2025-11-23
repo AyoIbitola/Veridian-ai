@@ -25,7 +25,7 @@ class VeridianSDK:
     def evaluate_action(self, action: Dict) -> Dict:
         return self.aim.evaluate_agent_action(action)
 
-    def run_redteam(self, user_prompt: str, target_description: str = "general AI assistant", target_url: str = None) -> List[Dict]:
+    def run_redteam(self, user_prompt: str, target_description: str = "general AI assistant", target_url: str = None, target_config: Dict = None) -> List[Dict]:
         """
         Run red team stress test on a simulated target model.
         
@@ -37,6 +37,6 @@ class VeridianSDK:
         Returns:
             List of attack results with evaluations
         """
-        return self.rte.run_red_team_test(user_prompt, target_description, target_url)
+        return self.rte.run_red_team_test(user_prompt, target_description, target_url, target_config)
 
 sdk = VeridianSDK()
