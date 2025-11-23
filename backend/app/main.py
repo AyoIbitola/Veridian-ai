@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.core.config import settings
-from app.api import agents, monitor, redteam, health, incidents, webhooks, tenants, metrics, auth, workspace, analytics, logs, keys, notifications
+from app.api import agents, monitor, redteam, health, incidents, webhooks, tenants, metrics, auth, workspace, analytics, logs, keys, notifications, llm_models
 from app.db.events import init_db
 
 app = FastAPI(title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json")
@@ -23,6 +23,7 @@ app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 app.include_router(logs.router, prefix="/logs", tags=["logs"])
 app.include_router(keys.router, prefix=f"{settings.API_V1_STR}/keys", tags=["keys"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
+app.include_router(llm_models.router, prefix=f"{settings.API_V1_STR}/models", tags=["models"])
 
 @app.get("/")
 async def root():
