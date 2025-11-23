@@ -88,3 +88,35 @@ async def register_agent(
     await db.commit()
     await db.refresh(agent)
     return agent
+
+@router.get("/{agent_id}/status")
+async def get_agent_status(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    api_key: APIKey = Depends(get_api_key)
+):
+    """Get agent connection status based on last_seen heartbeat"""
+    from datetime import datetime, timedelta
+    
+    result = await db.execute(select(Agent).filter(Agent.id == agent_id))
+    agent = result.scalars().first()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    if agent.tenant_id != api_key.tenant_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Check if agent is connected (seen in last 60 seconds)
+    is_connected = False
+    if agent.last_seen:
+        time_since_last_seen = (datetime.utcnow() - agent.last_seen).total_seconds()
+        is_connected = time_since_last_seen < 60
+    
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "last_seen": agent.last_seen.isoformat() if agent.last_seen else None,
+        "is_connected": is_connected,
+        "connection_type": "url" if agent.target_url else "sdk"
+    }

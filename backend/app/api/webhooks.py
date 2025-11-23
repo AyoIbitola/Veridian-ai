@@ -37,6 +37,14 @@ async def handle_agent_event(
     db: AsyncSession = Depends(get_db),
     api_key: APIKey = Depends(get_api_key)
 ):
+    # Update agent last_seen (heartbeat)
+    from datetime import datetime
+    agent_result = await db.execute(select(Agent).filter(Agent.id == event.agent_id))
+    agent = agent_result.scalars().first()
+    if agent:
+        agent.last_seen = datetime.utcnow()
+        await db.commit()
+    
     # Logic to check event type and payload
     if event.event_type == "tool_call":
         # Use AIM Engine to evaluate the tool call

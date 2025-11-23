@@ -37,6 +37,7 @@ class Agent(Base):
     target_url = Column(String, nullable=True) # For Option 1 (URL Mode)
     api_key = Column(String, nullable=True) # For Option 2 (SDK Mode) & Rotation
     mode = Column(String, default="sdk") # "url" or "sdk"
+    last_seen = Column(DateTime, nullable=True) # Last heartbeat timestamp
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tenant = relationship("Tenant", back_populates="agents")

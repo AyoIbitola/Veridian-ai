@@ -22,6 +22,14 @@ async def monitor_message(
         # In a real scenario we might block this, but for now we trust the API key's tenant
         msg_in.tenant_id = api_key.tenant_id
 
+    # Update agent last_seen (heartbeat)
+    from datetime import datetime
+    from app.db.models import Agent
+    agent_result = await db.execute(select(Agent).filter(Agent.id == msg_in.agent_id))
+    agent = agent_result.scalars().first()
+    if agent:
+        agent.last_seen = datetime.utcnow()
+    
     # Log message
     db_msg = Message(
         tenant_id=msg_in.tenant_id,
