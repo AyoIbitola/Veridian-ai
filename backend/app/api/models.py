@@ -5,7 +5,8 @@ from datetime import datetime
 class AgentRegister(BaseModel):
     name: str
     tenant_id: int
-    model_info: str
+    model_info: str  # Model name (e.g., "gpt-4", "claude-3")
+    target_url: str = None  # Optional URL for Red Team testing
     allowed_tools: List[str]
 
 class AgentResponse(AgentRegister):

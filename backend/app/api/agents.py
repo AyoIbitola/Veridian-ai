@@ -81,6 +81,7 @@ async def register_agent(
         name=agent_in.name,
         tenant_id=agent_in.tenant_id,
         model_info=agent_in.model_info,
+        target_url=agent_in.target_url,
         allowed_tools=agent_in.allowed_tools
     )
     db.add(agent)
