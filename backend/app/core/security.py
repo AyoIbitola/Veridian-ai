@@ -59,13 +59,18 @@ async def get_api_key(
     api_key_header: str = Depends(api_key_header),
     db: AsyncSession = Depends(get_db)
 ) -> APIKey:
+    import hashlib
+    
     if not api_key_header:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API Key"
         )
     
-    result = await db.execute(select(APIKey).filter(APIKey.key_hash == api_key_header, APIKey.is_active == True))
+    # Hash the incoming key to match stored hash
+    incoming_key_hash = hashlib.sha256(api_key_header.encode()).hexdigest()
+    
+    result = await db.execute(select(APIKey).filter(APIKey.key_hash == incoming_key_hash, APIKey.is_active == True))
     api_key_obj = result.scalars().first()
     
     if not api_key_obj:

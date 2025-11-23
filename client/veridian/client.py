@@ -2,7 +2,7 @@ import requests
 from typing import Dict, Any, Optional
 
 class Veridian:
-    def __init__(self, api_key: str, base_url: str = "http://localhost:8000/api/v1"):
+    def __init__(self, api_key: str, base_url: str = "https://veridian-ai.onrender.com/v1"):
         self.api_key = api_key
         self.base_url = base_url
         self.headers = {

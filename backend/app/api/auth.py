@@ -14,6 +14,8 @@ router = APIRouter()
 class UserRegister(BaseModel):
     email: str
     password: str
+    full_name: str
+    organization_name: str
 
 class UserLogin(BaseModel):
     email: str
@@ -26,6 +28,7 @@ class Token(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: str
+    full_name: str = None
     provider: str
 
 @router.post("/register", response_model=Token)
@@ -37,13 +40,18 @@ async def register(user_in: UserRegister, db: AsyncSession = Depends(get_db)):
     
     # Create User
     hashed_password = security.get_password_hash(user_in.password)
-    user = User(email=user_in.email, password_hash=hashed_password, provider="local")
+    user = User(
+        email=user_in.email, 
+        password_hash=hashed_password, 
+        full_name=user_in.full_name,
+        provider="local"
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
     
-    # Create Default Tenant & Workspace
-    tenant = Tenant(name=f"{user.email}'s Org")
+    # Create Tenant with provided Organization Name
+    tenant = Tenant(name=user_in.organization_name)
     db.add(tenant)
     await db.commit()
     await db.refresh(tenant)
@@ -68,7 +76,12 @@ async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(security.get_current_user)): 
-    return {"id": current_user.id, "email": current_user.email, "provider": current_user.provider}
+    return {
+        "id": current_user.id, 
+        "email": current_user.email, 
+        "full_name": current_user.full_name,
+        "provider": current_user.provider
+    }
 
 # GitHub OAuth
 @router.get("/github/login")
@@ -98,19 +111,20 @@ async def github_callback(code: str, db: AsyncSession = Depends(get_db)):
         )
         user_data = user_resp.json()
         email = user_data.get("email")
+        name = user_data.get("name") or email.split("@")[0]
         
         # Find or Create User
         result = await db.execute(select(User).filter(User.email == email))
         user = result.scalars().first()
         
         if not user:
-            user = User(email=email, password_hash="", provider="github")
+            user = User(email=email, full_name=name, password_hash="", provider="github")
             db.add(user)
             await db.commit()
             await db.refresh(user)
             
             # Create Default Tenant
-            tenant = Tenant(name=f"{email}'s Org")
+            tenant = Tenant(name=f"{name}'s Org")
             db.add(tenant)
             await db.commit()
             await db.refresh(tenant)
@@ -149,17 +163,18 @@ async def google_callback(code: str, db: AsyncSession = Depends(get_db)):
         )
         user_data = user_resp.json()
         email = user_data.get("email")
+        name = user_data.get("name") or email.split("@")[0]
         
         result = await db.execute(select(User).filter(User.email == email))
         user = result.scalars().first()
         
         if not user:
-            user = User(email=email, password_hash="", provider="google")
+            user = User(email=email, full_name=name, password_hash="", provider="google")
             db.add(user)
             await db.commit()
             await db.refresh(user)
             
-            tenant = Tenant(name=f"{email}'s Org")
+            tenant = Tenant(name=f"{name}'s Org")
             db.add(tenant)
             await db.commit()
             await db.refresh(tenant)
