@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     
     GEMINI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
     
     # Notification Settings
     SMTP_SERVER: str = "smtp.gmail.com"

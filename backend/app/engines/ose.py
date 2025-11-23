@@ -2,25 +2,28 @@ import re
 import json
 import logging
 from typing import Dict, List, Optional
-import google.generativeai as genai
+from openai import OpenAI
 from app.core.config import settings
 
 class OutputSafetyEvaluator:
     def __init__(self):
         self.logger = logging.getLogger("Veridian.OSE")
         
-        # Initialize Gemini model for LLM-based safety evaluation
+        # Initialize OpenRouter client for LLM-based safety evaluation
         try:
-            if settings.GEMINI_API_KEY:
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                self.gemini_model = genai.GenerativeModel('gemini-2.0-flash')
-                self.logger.info("OSE-Engine initialized with Gemini API")
+            if settings.OPENROUTER_API_KEY:
+                self.client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=settings.OPENROUTER_API_KEY,
+                )
+                self.model_name = "openai/gpt-oss-20b:free"  # Free model from OpenRouter
+                self.logger.info("OSE-Engine initialized with OpenRouter API (GPT-OSS-20B)")
             else:
-                self.logger.warning("GEMINI_API_KEY not set. OSE-Engine running in limited mode.")
-                self.gemini_model = None
+                self.logger.warning("OPENROUTER_API_KEY not set. OSE-Engine running in limited mode.")
+                self.client = None
         except Exception as e:
-            self.logger.warning(f"Failed to initialize Gemini: {e}. Using fallback only.")
-            self.gemini_model = None
+            self.logger.warning(f"Failed to initialize OpenRouter: {e}. Using fallback only.")
+            self.client = None
         
         self.pii_patterns = {
             "email": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
@@ -97,9 +100,9 @@ class OutputSafetyEvaluator:
         return any(keyword in text.lower() for keyword in self.harmful_keywords)
 
     def llm_judge(self, prompt: str, output: str) -> Dict:
-        """Uses Gemini API to evaluate output safety."""
-        if not self.gemini_model:
-            self.logger.warning("Gemini model not available. Using fallback judge.")
+        """Uses OpenRouter API to evaluate output safety."""
+        if not self.client:
+            self.logger.warning("OpenRouter client not available. Using fallback judge.")
             return self._mock_judge(output)
         
         # Construct the safety evaluation prompt
@@ -124,18 +127,19 @@ Respond ONLY with valid JSON in this exact format:
 }}"""
         
         try:
-            # Generate response using Gemini with JSON mode
-            response = self.gemini_model.generate_content(
-                safety_prompt,
-                generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json",
-                    temperature=0.1,
-                    max_output_tokens=200
-                )
+            # Generate response using OpenRouter with JSON mode
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "user", "content": safety_prompt}
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.1,
+                max_tokens=200
             )
             
             # Parse JSON response
-            result_text = response.text.strip()
+            result_text = response.choices[0].message.content.strip()
             parsed = json.loads(result_text)
             
             return {
@@ -146,10 +150,10 @@ Respond ONLY with valid JSON in this exact format:
             }
             
         except json.JSONDecodeError as e:
-            self.logger.warning(f"Failed to parse Gemini JSON response: {e}")
+            self.logger.warning(f"Failed to parse OpenRouter JSON response: {e}")
             return self._mock_judge(output)
         except Exception as e:
-            self.logger.error(f"Gemini API call failed: {e}")
+            self.logger.error(f"OpenRouter API call failed: {e}")
             return self._mock_judge(output)
     
     def _mock_judge(self, output: str) -> Dict:
