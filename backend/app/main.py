@@ -1,9 +1,23 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import agents, monitor, redteam, health, incidents, webhooks, tenants, metrics, auth, workspace, analytics, logs, keys, notifications, llm_models
 from app.db.events import init_db
 
 app = FastAPI(title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json")
+
+# CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Local Vite dev
+        "http://localhost:8080",  # Local alternative
+        "https://veridian-ai-1.netlify.app",  # Production frontend
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.on_event("startup")
 async def on_startup():
