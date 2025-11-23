@@ -44,61 +44,20 @@ async def get_incident_timeline(agentId: int, period: str = "24h", db: AsyncSess
     
     since = datetime.utcnow() - timedelta(hours=hours)
     
-    # Group by hour
-    # Note: SQLite date truncation is tricky, simplifying to raw fetch for now
-    # In production Postgres: func.date_trunc('hour', Message.timestamp)
-    
-    query = select(Message.timestamp).where(
+    # Group by hour using Postgres date_trunc
+    query = select(
+        func.date_trunc('hour', Message.timestamp).label('hour'), 
+        func.count(Message.id)
+    ).where(
         Message.agent_id == agentId,
         Message.timestamp >= since,
         Message.decision != "allow"
-    )
+    ).group_by('hour').order_by('hour')
+    
     result = await db.execute(query)
-    timestamps = result.scalars().all()
+    rows = result.all()
     
-    # Aggregate in python for database agnosticism (SQLite vs Postgres)
-    timeline = {}
-    for ts in timestamps:
-        key = ts.replace(minute=0, second=0, microsecond=0).isoformat()
-        timeline[key] = timeline.get(key, 0) + 1
-        
-    return [{"time": k, "count": v} for k, v in timeline.items()]
-
-@router.get("/violations/categories")
-async def get_violation_categories(agentId: int, period: str = "24h", db: AsyncSession = Depends(get_db)):
-    # This would require parsing the 'risks' JSON column or having a separate categories table
-    # For now, we'll return a placeholder as implementing JSON querying in SQLite is complex
-    return {
-        "prompt_injection": 0,
-        "pii_leak": 0,
-        "toxic_content": 0
-    }
-
-@router.get("/responses/heatmap")
-async def get_response_heatmap(agentId: int, db: AsyncSession = Depends(get_db)):
-    # Heatmap of activity (allow vs block) over last 7 days
-    since = datetime.utcnow() - timedelta(days=7)
-    query = select(Message.timestamp).where(
-        Message.agent_id == agentId,
-        Message.timestamp >= since
-    )
-    result = await db.execute(query)
-    timestamps = result.scalars().all()
-    
-    # 7 days x 24 hours grid
-    grid = [[0 for _ in range(24)] for _ in range(7)]
-    
-    for ts in timestamps:
-        day_idx = (datetime.utcnow() - ts).days
-        if 0 <= day_idx < 7:
-            grid[day_idx][ts.hour] += 1
-            
-    return grid
-
-@router.get("/behaviour-drift")
-async def get_behaviour_drift(agentId: int):
-    # Placeholder: Drift detection requires vector DB or statistical analysis of embeddings
-    return {"drift_detected": False, "magnitude": 0.0}
+    return [{"time": row[0].isoformat(), "count": row[1]} for row in rows]
 
 @router.get("/usage")
 async def get_model_usage(agentId: int, period: str = "30d", db: AsyncSession = Depends(get_db)):
@@ -107,54 +66,49 @@ async def get_model_usage(agentId: int, period: str = "30d", db: AsyncSession = 
     
     since = datetime.utcnow() - timedelta(days=days)
     
-    # Count messages per day
-    # SQLite doesn't support date_trunc easily, so we fetch timestamps and aggregate in Python
-    # In production with Postgres, use: func.date_trunc('day', Message.timestamp)
-    
-    query = select(Message.timestamp).where(
+    # Count messages per day using Postgres date_trunc
+    query = select(
+        func.date_trunc('day', Message.timestamp).label('day'),
+        func.count(Message.id)
+    ).where(
         Message.agent_id == agentId,
         Message.timestamp >= since
-    )
-    result = await db.execute(query)
-    timestamps = result.scalars().all()
+    ).group_by('day').order_by('day')
     
-    usage_map = {}
-    for i in range(days):
-        date_key = (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
-        usage_map[date_key] = 0
-        
-    for ts in timestamps:
-        date_key = ts.strftime("%Y-%m-%d")
-        if date_key in usage_map:
-            usage_map[date_key] += 1
-            
-    return [{"date": k, "count": v} for k, v in sorted(usage_map.items())]
+    result = await db.execute(query)
+    rows = result.all()
+    
+    return [{"date": row[0].strftime("%Y-%m-%d"), "count": row[1]} for row in rows]
 
 @router.get("/threat-score/history")
 async def get_risk_score_history(agentId: int, period: str = "30d", db: AsyncSession = Depends(get_db)):
     days = 30
     since = datetime.utcnow() - timedelta(days=days)
     
-    query = select(Message.timestamp, Message.decision).where(
+    # Group by day and decision
+    query = select(
+        func.date_trunc('day', Message.timestamp).label('day'),
+        Message.decision,
+        func.count(Message.id)
+    ).where(
         Message.agent_id == agentId,
         Message.timestamp >= since
-    )
+    ).group_by('day', Message.decision).order_by('day')
+    
     result = await db.execute(query)
     rows = result.all()
     
-    # Group by day
+    # Process results in Python to calculate score per day
     daily_stats = {}
-    for i in range(days):
-        date_key = (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
-        daily_stats[date_key] = {"total": 0, "unsafe": 0}
+    for day, decision, count in rows:
+        date_key = day.strftime("%Y-%m-%d")
+        if date_key not in daily_stats:
+            daily_stats[date_key] = {"total": 0, "unsafe": 0}
         
-    for ts, decision in rows:
-        date_key = ts.strftime("%Y-%m-%d")
-        if date_key in daily_stats:
-            daily_stats[date_key]["total"] += 1
-            if decision in ["block", "flag"]:
-                daily_stats[date_key]["unsafe"] += 1
-                
+        daily_stats[date_key]["total"] += count
+        if decision in ["block", "flag"]:
+            daily_stats[date_key]["unsafe"] += count
+            
     history = []
     for date_key, stats in sorted(daily_stats.items()):
         score = 0
