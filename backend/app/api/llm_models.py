@@ -14,6 +14,8 @@ class ModelResponse(BaseModel):
     name: str
     agent_count: int
     agents: List[str] = []
+    risk_score: int = 0
+    calls: int = 0
 
 @router.get("/", response_model=List[ModelResponse])
 async def list_models(
@@ -21,27 +23,55 @@ async def list_models(
     db: AsyncSession = Depends(get_db),
     api_key: APIKey = Depends(get_api_key)
 ):
-    """List all models used by agents in this tenant"""
+    """List all models used by agents in this tenant with metrics"""
+    from sqlalchemy import func
+    from app.db.models import Message
+    from datetime import datetime, timedelta
+    
     result = await db.execute(
         select(Agent).filter(Agent.tenant_id == tenant_id)
     )
     agents = result.scalars().all()
     
     # Group agents by model
-    models_map = defaultdict(list)
+    models_map = defaultdict(lambda: {"agents": [], "agent_ids": []})
     for agent in agents:
         model_name = agent.model_info or "Unknown"
-        models_map[model_name].append(agent.name)
+        models_map[model_name]["agents"].append(agent.name)
+        models_map[model_name]["agent_ids"].append(agent.id)
     
-    # Convert to response format
-    models = [
-        ModelResponse(
-            name=model_name,
-            agent_count=len(agent_names),
-            agents=agent_names
+    # Enhance with metrics
+    models = []
+    for model_name, data in models_map.items():
+        agent_ids = data["agent_ids"]
+        
+        # Get total calls (last 24h) for all agents using this model
+        msg_result = await db.execute(
+            select(func.count(Message.id)).filter(
+                Message.agent_id.in_(agent_ids),
+                Message.timestamp >= datetime.utcnow() - timedelta(hours=24)
+            )
         )
-        for model_name, agent_names in models_map.items()
-    ]
+        calls_24h = msg_result.scalar() or 0
+        
+        # Get risk score
+        blocked_result = await db.execute(
+            select(func.count(Message.id)).filter(
+                Message.agent_id.in_(agent_ids),
+                Message.timestamp >= datetime.utcnow() - timedelta(hours=24),
+                Message.decision.in_(["block", "flag"])
+            )
+        )
+        blocked_count = blocked_result.scalar() or 0
+        risk_score = int((blocked_count / calls_24h * 100)) if calls_24h > 0 else 0
+        
+        models.append({
+            "name": model_name,
+            "agent_count": len(data["agents"]),
+            "agents": data["agents"],
+            "risk_score": risk_score,
+            "calls": calls_24h
+        })
     
     return models
 
