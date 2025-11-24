@@ -25,10 +25,15 @@ async def monitor_message(
     # Update agent last_seen (heartbeat)
     from datetime import datetime
     from app.db.models import Agent
+    from fastapi import HTTPException
+    
     agent_result = await db.execute(select(Agent).filter(Agent.id == msg_in.agent_id))
     agent = agent_result.scalars().first()
-    if agent:
-        agent.last_seen = datetime.utcnow()
+    
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent with ID {msg_in.agent_id} not found. Please register the agent first.")
+        
+    agent.last_seen = datetime.utcnow()
     
     # Log message
     db_msg = Message(
