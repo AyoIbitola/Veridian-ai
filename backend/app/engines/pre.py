@@ -22,26 +22,26 @@ class PromptRiskEvaluator:
         ]
         
         self.injection_patterns = [
-            r"system prompt",
-            r"override",
-            r"delete",
-            r"update",
-            r"ignore",
-            r"disregard",
-            r"forget",
-            r"modify",
-            r"alter",
-            r"change",
-            r"execute",
-            r"run",
-            r"command",
-            r"instruction",
-            r"confidential",
-            r"secret",
-            r"private",
-            r"leak",
-            r"reveal",
-            r"disclose"
+            r"\bsystem prompt\b",
+            r"\boverride\b",
+            r"\bdelete\b",
+            r"\bupdate\b",
+            r"\bignore\b",
+            r"\bdisregard\b",
+            r"\bforget\b",
+            r"\bmodify\b",
+            r"\balter\b",
+            r"\bchange\b",
+            r"\bexecute\b",
+            r"\brun\b",
+            r"\bcommand\b",
+            r"\binstruction\b",
+            r"\bconfidential\b",
+            r"\bsecret\b",
+            r"\bprivate\b",
+            r"\bleak\b",
+            r"\breveal\b",
+            r"\bdisclose\b"
         ]
         
         # 2. Advanced ML Classifier (DeBERTa v2)
