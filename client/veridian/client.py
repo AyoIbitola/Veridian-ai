@@ -81,3 +81,25 @@ class Veridian:
             return response.json()
         except requests.exceptions.RequestException as e:
             return {"status": "error", "reason": str(e)}
+
+    def sandbox_process(self, filename: str, content: bytes, instruction: str = "extract_summary") -> Dict[str, Any]:
+        """
+        Send a file to the Veridian Sandbox for safe extraction.
+        """
+        url = f"{self.base_url}/sandbox/process"
+        files = {
+            'file': (filename, content)
+        }
+        data = {
+            'instruction': instruction
+        }
+        # Override headers to remove Content-Type JSON, allowing requests to set multipart boundary
+        headers = self.headers.copy()
+        headers.pop("Content-Type", None)
+        
+        try:
+            response = requests.post(url, files=files, data=data, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"status": "error", "reason": str(e)}
